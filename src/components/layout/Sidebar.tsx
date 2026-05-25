@@ -181,7 +181,7 @@ export function Sidebar({ defaultCollapsed = false, onCollapse }: SidebarProps) 
       >
         {/* Logo mark */}
         <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-[8px] bg-[--accent] text-white shadow-sm">
-          <span className="text-xs font-bold tracking-tighter">A</span>
+          <span className="text-xs font-bold tracking-tighter">C</span>
         </div>
 
         <AnimatePresence initial={false}>
@@ -195,7 +195,7 @@ export function Sidebar({ defaultCollapsed = false, onCollapse }: SidebarProps) 
               className="overflow-hidden min-w-0"
             >
               <p className="text-sm font-semibold tracking-tight text-[--foreground] truncate">
-                Analytics
+                Clarity
               </p>
               <p className="text-[10px] text-[--foreground-muted] leading-none mt-0.5">
                 Workspace

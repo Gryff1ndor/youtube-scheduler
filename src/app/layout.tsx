@@ -18,15 +18,15 @@ const inter = Inter({
 /* ── SEO Metadata ── */
 export const metadata: Metadata = {
   title: {
-    template: "%s | Analytics",
-    default: "Analytics — Dashboard",
+    template: "%s | Clarity",
+    default: "Clarity — Dashboard",
   },
   description:
     "A clean, minimalist analytics dashboard. Monitor metrics, review reports, and manage your workspace.",
   keywords: ["analytics", "dashboard", "metrics", "reports"],
-  authors: [{ name: "Analytics Team" }],
+  authors: [{ name: "Clarity Team" }],
   openGraph: {
-    title: "Analytics Dashboard",
+    title: "Clarity Dashboard",
     description: "Monitor metrics and review reports.",
     type: "website",
   },
