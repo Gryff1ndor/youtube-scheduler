@@ -37,3 +37,8 @@ next-env.d.ts
 
 # local database
 database.sqlite
+database.sqlite-shm
+database.sqlite-wal
+
+# temp scripts
+commit.bat
