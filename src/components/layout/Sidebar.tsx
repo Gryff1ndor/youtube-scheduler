@@ -2,6 +2,7 @@
 
 import { useState, useCallback } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -180,8 +181,8 @@ export function Sidebar({ defaultCollapsed = false, onCollapse }: SidebarProps) 
         )}
       >
         {/* Logo mark */}
-        <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-[8px] bg-[--accent] text-white shadow-sm">
-          <span className="text-xs font-bold tracking-tighter">C</span>
+        <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-[8px] bg-white shadow-sm overflow-hidden">
+          <Image src="/logo.png" alt="Clarity Logo" width={28} height={28} className="object-cover" />
         </div>
 
         <AnimatePresence initial={false}>
