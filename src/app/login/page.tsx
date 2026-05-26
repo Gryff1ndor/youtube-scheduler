@@ -27,6 +27,8 @@ export default function LoginPage() {
         display: "flex",
         alignItems: "stretch",
         fontFamily: "'Inter', sans-serif",
+        position: "relative",
+        overflow: "hidden",
       }}
     >
       {/* ── LEFT PANEL: Bento grid ── */}
@@ -180,6 +182,7 @@ export default function LoginPage() {
 
       {/* ── RIGHT PANEL: Auth form ── */}
       <div
+        className="auth-panel"
         style={{
           flex: 1,
           background: "#0a0a0a",
@@ -190,11 +193,52 @@ export default function LoginPage() {
         }}
       >
         <motion.div
+          className="auth-card"
           initial={{ opacity: 0, y: 16 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.55, ease: [0.16, 1, 0.3, 1] }}
           style={{ width: "100%", maxWidth: "340px" }}
         >
+          {/* Logo Brand Mark */}
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "10px",
+              marginBottom: "32px",
+            }}
+          >
+            <div
+              style={{
+                width: "36px",
+                height: "36px",
+                background: "#ffffff",
+                borderRadius: "10px",
+                overflow: "hidden",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                boxShadow: "0 4px 12px rgba(0, 0, 0, 0.25)",
+              }}
+            >
+              <img
+                src="/logo.png"
+                alt="Clarity Logo"
+                style={{ width: "36px", height: "36px", objectFit: "cover" }}
+              />
+            </div>
+            <span
+              style={{
+                fontSize: "20px",
+                fontWeight: 600,
+                color: "#ffffff",
+                letterSpacing: "-0.5px",
+              }}
+            >
+              Clarity
+            </span>
+          </div>
+
           {/* Heading */}
           <h1
             style={{
@@ -325,8 +369,39 @@ export default function LoginPage() {
 
       {/* Responsive CSS */}
       <style>{`
+        @media (max-width: 767px) {
+          .auth-panel {
+            background-image: 
+              radial-gradient(circle at top right, rgba(168, 85, 247, 0.08), transparent 50%),
+              radial-gradient(circle at bottom left, rgba(233, 232, 160, 0.04), transparent 50%),
+              url('/bento-bg.png') !important;
+            background-size: cover !important;
+            background-position: center !important;
+            padding: 24px 16px !important;
+          }
+          .auth-card {
+            background: rgba(10, 10, 10, 0.72) !important;
+            backdrop-filter: blur(20px) saturate(140%) !important;
+            -webkit-backdrop-filter: blur(20px) saturate(140%) !important;
+            border: 1px solid rgba(255, 255, 255, 0.12) !important;
+            border-radius: 24px !important;
+            padding: 32px 24px !important;
+            box-shadow: 0 12px 40px 0 rgba(0, 0, 0, 0.5) !important;
+            width: 100% !important;
+            max-width: 360px !important;
+          }
+        }
         @media (min-width: 768px) {
-          .md-left-panel { display: flex !important; }
+          .md-left-panel {
+            display: flex !important;
+          }
+          .auth-card {
+            background: transparent !important;
+            backdrop-filter: none !important;
+            border: none !important;
+            padding: 0 !important;
+            box-shadow: none !important;
+          }
         }
       `}</style>
     </div>
