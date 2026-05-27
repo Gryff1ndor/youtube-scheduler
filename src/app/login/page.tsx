@@ -28,7 +28,7 @@ export default function LoginPage() {
         alignItems: "stretch",
         fontFamily: "'Inter', sans-serif",
         position: "relative",
-        overflow: "hidden",
+        overflowY: "auto",
       }}
     >
       {/* ── LEFT PANEL: Bento grid ── */}
