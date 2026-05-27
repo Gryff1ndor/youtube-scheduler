@@ -319,8 +319,10 @@ export default function LoginPage() {
 
           {/* YouTube sign-in (secondary) */}
           <motion.button
-            whileHover={{ scale: 1.015, background: "rgba(255,255,255,0.07)" }}
-            whileTap={{ scale: 0.975 }}
+            onClick={handleGoogleLogin}
+            disabled={isLoggingIn}
+            whileHover={{ scale: isLoggingIn ? 1 : 1.015, background: isLoggingIn ? "rgba(255,255,255,0.04)" : "rgba(255,255,255,0.07)" }}
+            whileTap={{ scale: isLoggingIn ? 1 : 0.975 }}
             style={{
               width: "100%",
               height: "46px",
@@ -334,7 +336,8 @@ export default function LoginPage() {
               alignItems: "center",
               justifyContent: "center",
               gap: "8px",
-              cursor: "pointer",
+              cursor: isLoggingIn ? "not-allowed" : "pointer",
+              opacity: isLoggingIn ? 0.75 : 1,
               letterSpacing: "0.01em",
             }}
           >
