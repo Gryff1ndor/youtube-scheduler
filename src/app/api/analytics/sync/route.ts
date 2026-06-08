@@ -30,7 +30,7 @@ export async function GET(request: Request) {
     }
 
     // Equivalent of the Oracle get_28_day_summary procedure
-    const summary = queryOne<{
+    const summary = await queryOne<{
       total_views:                 number;
       total_watch_time_hours:      number;
       net_subscribers:             number;
@@ -60,7 +60,7 @@ export async function GET(request: Request) {
     );
 
     // Daily breakdown for sparklines / charts
-    const daily = query<{
+    const daily = await query<{
       metric_date:          string;
       views:                number;
       watch_time_hours:     number;
@@ -124,7 +124,7 @@ export async function POST(request: Request) {
       );
     }
 
-    const result = upsertChannelMetrics({
+    const result = await upsertChannelMetrics({
       channelId,
       metricDate:           metrics.date,
       views:                metrics.views               ?? 0,
@@ -138,7 +138,7 @@ export async function POST(request: Request) {
     return NextResponse.json({
       success:    true,
       rowId:      Number(result.lastInsertRowid),
-      changes:    result.changes,
+      changes:    result.rowsAffected,
       channelId,
       metricDate: metrics.date,
       message:    `Metrics for ${metrics.date} synced successfully.`,

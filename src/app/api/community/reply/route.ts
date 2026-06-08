@@ -3,7 +3,7 @@ import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { google } from "googleapis";
 import { GoogleGenerativeAI } from "@google/generative-ai";
-import { logAiAction } from "@/lib/db";
+import { logAiAction, markCommentReplied } from "@/lib/db";
 
 // ── Gemini client (lazy-init so missing key degrades gracefully) ─────────────
 function getGenAI() {
@@ -148,6 +148,13 @@ Write the reply now:`;
           },
         });
 
+        // Mark as replied in the local DB
+        try {
+          await markCommentReplied(commentId, replyText);
+        } catch (dbErr) {
+          console.warn("[community/reply] Failed to mark comment as replied in DB:", dbErr);
+        }
+
         return NextResponse.json({
           success: true,
           reply: replyText,
@@ -166,12 +173,20 @@ Write the reply now:`;
       }
     }
 
-    // ── Dev / no-auth — return draft only ────────────────────────────────────
+    // ── Dev / no-auth — return draft only (and mock db update) ───────────────
+    // In dev mode, we might just be testing the UI, so we can pretend it posted
+    // or just draft it. If we want it to move to the 'Replied' tab, we can mark it.
+    try {
+      await markCommentReplied(commentId, replyText);
+    } catch (dbErr) {
+      console.warn("[community/reply] Failed to mark comment as replied in DB:", dbErr);
+    }
+
     return NextResponse.json({
       success: true,
       reply: replyText,
-      posted: false,
-      message: "Draft generated (dev mode — not posted to YouTube).",
+      posted: true, // Mocking successful post for testing UI state
+      message: "Draft generated and mocked as posted (dev mode).",
     });
 
   } catch (err: any) {

@@ -28,7 +28,7 @@ export async function GET(req: Request) {
 
     try {
       // 1. Find all pending uploads whose scheduled time has passed
-      const pendingUploads = query<PendingUpload>(
+      const pendingUploads = await query<PendingUpload>(
         `SELECT id, youtube_video_id, video_title
          FROM scheduled_uploads
          WHERE upload_status = 'pending'
@@ -55,7 +55,7 @@ export async function GET(req: Request) {
 
           if (!youtube_video_id) {
             console.warn(`[cron/publish] Row id=${id} has no youtube_video_id — marking failed.`);
-            run(
+            await run(
               `UPDATE scheduled_uploads SET upload_status = 'failed' WHERE id = ?`,
               [id]
             );
@@ -75,7 +75,7 @@ export async function GET(req: Request) {
             });
 
             // Mark as success in SQLite
-            run(
+            await run(
               `UPDATE scheduled_uploads SET upload_status = 'success' WHERE id = ?`,
               [id]
             );
@@ -87,7 +87,7 @@ export async function GET(req: Request) {
             console.error(`[cron/publish] Failed to publish videoId=${youtube_video_id}:`, msg);
 
             // Mark as failed in SQLite
-            run(
+            await run(
               `UPDATE scheduled_uploads SET upload_status = 'failed' WHERE id = ?`,
               [id]
             );

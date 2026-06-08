@@ -11,6 +11,7 @@ import {
   Settings,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useLiveNotifications } from "@/hooks/useLiveNotifications";
 
 const NAV_ITEMS = [
   { id: "dashboard", label: "Dashboard", href: "/",          icon: LayoutDashboard, badge: null },
@@ -91,6 +92,7 @@ function NavItem({
 // ── Floating Liquid Glass Nav Bar ─────────────────────────────────────────────
 export function FloatingMobileNav() {
   const pathname = usePathname();
+  const { pendingComments } = useLiveNotifications();
 
   return (
     <motion.nav
@@ -119,17 +121,26 @@ export function FloatingMobileNav() {
         "dark:shadow-[inset_0_1px_2px_rgba(255,255,255,0.2),_inset_0_-1px_1px_rgba(255,255,255,0.05),_0_8px_32px_rgba(0,0,0,0.8)]"
       )}
     >
-      {NAV_ITEMS.map((item) => (
-        <NavItem
-          key={item.id}
-          {...item}
-          isActive={
-            item.href === "/"
-              ? pathname === "/"
-              : pathname.startsWith(item.href)
-          }
-        />
-      ))}
+      {NAV_ITEMS.map((item) => {
+        const badgeValue = item.id === "community"
+          ? (pendingComments > 0 ? String(pendingComments) : null)
+          : item.badge;
+
+        return (
+          <NavItem
+            key={item.id}
+            href={item.href}
+            label={item.label}
+            icon={item.icon}
+            badge={badgeValue}
+            isActive={
+              item.href === "/"
+                ? pathname === "/"
+                : pathname.startsWith(item.href)
+            }
+          />
+        );
+      })}
     </motion.nav>
   );
 }

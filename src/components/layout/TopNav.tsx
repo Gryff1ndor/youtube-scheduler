@@ -8,6 +8,7 @@ import { Bell, Search } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { ThemeToggle } from "@/components/ui/ThemeToggle";
 import { cn } from "@/lib/utils";
+import { useLiveNotifications } from "@/hooks/useLiveNotifications";
 
 /* ── Page title mapping ── */
 const PAGE_TITLES: Record<string, { title: string; crumbs: string[] }> = {
@@ -19,6 +20,14 @@ const PAGE_TITLES: Record<string, { title: string; crumbs: string[] }> = {
   "/settings":       { title: "Settings",      crumbs: ["Home", "Settings"] },
 };
 
+function relativeTime(iso: string): string {
+  const diff = (Date.now() - new Date(iso).getTime()) / 1000;
+  if (diff < 60) return "just now";
+  if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
+  if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
+  return `${Math.floor(diff / 86400)}d ago`;
+}
+
 export function TopNav() {
   const { data: session } = useSession();
   const pathname = usePathname();
@@ -26,7 +35,7 @@ export function TopNav() {
   const [showSearch, setShowSearch] = useState(false);
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
-  const [notificationsRead, setNotificationsRead] = useState(false);
+  const { unreadNotifications, notifications, markAllAsRead } = useLiveNotifications();
 
   const pageInfo = PAGE_TITLES[pathname] ?? {
     title: "Page",
@@ -141,7 +150,7 @@ export function TopNav() {
             )}
           >
             <Bell size={16} strokeWidth={1.75} />
-            {!notificationsRead && <span className="absolute top-1.5 right-1.5 h-1.5 w-1.5 rounded-full bg-accent ring-1 ring-background" />}
+            {unreadNotifications > 0 && <span className="absolute top-1.5 right-1.5 h-1.5 w-1.5 rounded-full bg-accent ring-1 ring-background" />}
           </button>
 
           <AnimatePresence>
@@ -160,11 +169,11 @@ export function TopNav() {
                 >
                   <div className="px-3 py-2 border-b border-border/60 flex items-center justify-between">
                     <p className="text-xs font-semibold text-foreground">Notifications</p>
-                    {!notificationsRead && (
+                    {unreadNotifications > 0 && (
                       <button 
                         onClick={(e) => {
                           e.stopPropagation();
-                          setNotificationsRead(true);
+                          markAllAsRead();
                         }}
                         className="text-[10px] text-[hsl(220_90%_56%)] font-medium cursor-pointer hover:underline focus:outline-none"
                       >
@@ -173,27 +182,32 @@ export function TopNav() {
                     )}
                   </div>
                   <div className="py-2 flex flex-col gap-1 max-h-64 overflow-y-auto">
-                    <div className={cn("px-3 py-2 hover:bg-foreground/5 rounded-lg transition-colors cursor-pointer flex gap-3", !notificationsRead && "bg-white/[0.02]")}>
-                      {!notificationsRead && <div className="mt-1 h-2 w-2 bg-accent rounded-full shrink-0" />}
-                      <div>
-                        <p className={cn("text-xs", !notificationsRead ? "text-foreground font-medium" : "text-foreground/80")}>New subscriber milestone reached!</p>
-                        <p className="text-[10px] text-foreground-subtle mt-0.5">2 hours ago</p>
-                      </div>
-                    </div>
-                    <div className={cn("px-3 py-2 hover:bg-foreground/5 rounded-lg transition-colors cursor-pointer flex gap-3", !notificationsRead && "bg-white/[0.02]")}>
-                      {!notificationsRead && <div className="mt-1 h-2 w-2 bg-accent rounded-full shrink-0" />}
-                      <div>
-                        <p className={cn("text-xs", !notificationsRead ? "text-foreground font-medium" : "text-foreground/80")}>Your latest video is gaining traction.</p>
-                        <p className="text-[10px] text-foreground-subtle mt-0.5">5 hours ago</p>
-                      </div>
-                    </div>
-                    <div className={cn("px-3 py-2 hover:bg-foreground/5 rounded-lg transition-colors cursor-pointer flex gap-3", !notificationsRead && "bg-white/[0.02]")}>
-                      {!notificationsRead && <div className="mt-1 h-2 w-2 bg-accent rounded-full shrink-0" />}
-                      <div>
-                        <p className={cn("text-xs", !notificationsRead ? "text-foreground font-medium" : "text-foreground/80")}>Weekly analytics report is ready.</p>
-                        <p className="text-[10px] text-foreground-subtle mt-0.5">1 day ago</p>
-                      </div>
-                    </div>
+                    {notifications.length === 0 ? (
+                      <p className="text-center text-xs text-foreground-subtle py-6">No notifications yet</p>
+                    ) : (
+                      notifications.map((n) => {
+                        const isUnread = n.read === 0;
+                        return (
+                          <div 
+                            key={n.id} 
+                            className={cn(
+                              "px-3 py-2 hover:bg-foreground/5 rounded-lg transition-colors cursor-pointer flex gap-3", 
+                              isUnread && "bg-white/[0.02]"
+                            )}
+                          >
+                            {isUnread && <div className="mt-1 h-2 w-2 bg-accent rounded-full shrink-0" />}
+                            <div>
+                              <p className={cn("text-xs", isUnread ? "text-foreground font-medium" : "text-foreground/80")}>
+                                {n.title}
+                              </p>
+                              <p className="text-[10px] text-foreground-subtle mt-0.5">
+                                {relativeTime(n.created_at)}
+                              </p>
+                            </div>
+                          </div>
+                        );
+                      })
+                    )}
                   </div>
                 </motion.div>
               </>

@@ -1,7 +1,10 @@
+export const dynamic = 'force-dynamic';
+
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { google } from "googleapis";
+import { upsertCommunityComment, query } from "@/lib/db";
 
 // ── Mock data for dev / unauthenticated mode ─────────────────────────────────
 const MOCK_COMMENTS = [
@@ -14,6 +17,7 @@ const MOCK_COMMENTS = [
     videoTitle: "Mastering Next.js 14 Server Components",
     videoId: "vid_001",
     likeCount: 24,
+    replied: false,
   },
   {
     id: "cmt_002",
@@ -24,6 +28,8 @@ const MOCK_COMMENTS = [
     videoTitle: "Building a Full-Stack Auth System",
     videoId: "vid_002",
     likeCount: 7,
+    replied: true,
+    replyText: "Make sure you're using next-auth v4.24+, they updated the required callback formats recently. Let me know if that works!",
   },
   {
     id: "cmt_003",
@@ -34,6 +40,7 @@ const MOCK_COMMENTS = [
     videoTitle: "UI/UX Micro-Interactions in React",
     videoId: "vid_003",
     likeCount: 41,
+    replied: false,
   },
   {
     id: "cmt_004",
@@ -44,6 +51,7 @@ const MOCK_COMMENTS = [
     videoTitle: "Tailwind CSS Dark Mode Masterclass",
     videoId: "vid_004",
     likeCount: 18,
+    replied: false,
   },
   {
     id: "cmt_005",
@@ -54,6 +62,8 @@ const MOCK_COMMENTS = [
     videoTitle: "Deploy Next.js to Vercel — Full Guide",
     videoId: "vid_005",
     likeCount: 5,
+    replied: true,
+    replyText: "Yes! The Analytics API works perfectly on Vercel. You just need to ensure your GOOGLE_CLIENT_ID and SECRET are set in the Vercel dashboard environment variables.",
   },
   {
     id: "cmt_006",
@@ -64,6 +74,7 @@ const MOCK_COMMENTS = [
     videoTitle: "Frontend Developer Roadmap 2025",
     videoId: "vid_006",
     likeCount: 89,
+    replied: false,
   },
   {
     id: "cmt_007",
@@ -74,6 +85,7 @@ const MOCK_COMMENTS = [
     videoTitle: "Building a YouTube Analytics Dashboard",
     videoId: "vid_007",
     likeCount: 12,
+    replied: false,
   },
   {
     id: "cmt_008",
@@ -84,6 +96,7 @@ const MOCK_COMMENTS = [
     videoTitle: "Advanced React Patterns for Production",
     videoId: "vid_008",
     likeCount: 33,
+    replied: false,
   },
 ];
 
@@ -121,7 +134,7 @@ export async function GET() {
 
     // 2. Fetch latest 20 comment threads on the channel
     const threadsRes = await youtube.commentThreads.list({
-      part: ["snippet"],
+      part: ["snippet", "replies"],
       allThreadsRelatedToChannelId: channelId,
       maxResults: 20,
       order: "time",
@@ -144,10 +157,12 @@ export async function GET() {
       }
     }
 
-    // 5. Shape the response
-    const comments = items.map((item) => {
+    // 5. Shape the response and sync to database
+    const mappedItems = items.map((item) => {
       const top = item.snippet?.topLevelComment?.snippet;
       const videoId = item.snippet?.videoId ?? "";
+      const authorChannelId = top?.authorChannelId?.value;
+      const isOwner = authorChannelId === channelId;
       return {
         id: item.id ?? "",
         authorName: top?.authorDisplayName ?? "Anonymous",
@@ -157,6 +172,66 @@ export async function GET() {
         videoId,
         videoTitle: videoTitleMap[videoId] ?? "Your Video",
         likeCount: top?.likeCount ?? 0,
+        totalReplyCount: item.snippet?.totalReplyCount ?? 0,
+        replyText: item.replies?.comments?.[0]?.snippet?.textDisplay ?? "",
+        isOwner,
+      };
+    });
+
+    if (mappedItems.length > 0) {
+      // Upsert into DB
+      const dbPromises = mappedItems.map(async (c) => {
+        await upsertCommunityComment({
+          id: c.id,
+          channelId: channelId,
+          videoId: c.videoId,
+          authorName: c.authorName,
+          authorProfileImageUrl: c.authorProfileImageUrl,
+          textDisplay: c.textDisplay,
+          publishedAt: c.publishedAt,
+          likeCount: c.likeCount,
+          replied: c.totalReplyCount > 0,
+          replyText: c.replyText || undefined,
+          isOwner: c.isOwner,
+        });
+      });
+      await Promise.all(dbPromises);
+    }
+
+    // Fetch the final replied status and reply text for these comments
+    let repliedMap = new Map<string, { replied: boolean; replyText: string }>();
+    if (mappedItems.length > 0) {
+      const ids = mappedItems.map((c) => c.id);
+      const placeholders = ids.map(() => "?").join(",");
+      const rows = await query<{ id: string; replied: number; reply_text: string | null }>(
+        `SELECT id, replied, reply_text FROM community_comments WHERE id IN (${placeholders})`,
+        ids
+      );
+      repliedMap = new Map(
+        rows.map((r) => [
+          r.id,
+          { replied: r.replied === 1, replyText: r.reply_text ?? "" },
+        ])
+      );
+    }
+
+    const comments = mappedItems
+      .filter((c) => !c.isOwner)
+      .map((c) => {
+      const dbInfo = repliedMap.get(c.id);
+      const isReplied = dbInfo?.replied ?? (c.totalReplyCount > 0);
+      const dbReplyText = dbInfo?.replyText ?? "";
+      return {
+        id: c.id,
+        authorName: c.authorName,
+        authorProfileImageUrl: c.authorProfileImageUrl,
+        textDisplay: c.textDisplay,
+        publishedAt: c.publishedAt,
+        videoId: c.videoId,
+        videoTitle: c.videoTitle,
+        likeCount: c.likeCount,
+        replied: isReplied,
+        replyText: c.replyText || dbReplyText || undefined,
       };
     });
 

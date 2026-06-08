@@ -34,7 +34,7 @@ export async function POST(req: Request) {
       : null;
 
     try {
-      const result = run(
+      const result = await run(
         `INSERT INTO scheduled_uploads
            (user_id, video_title, video_description, tags,
             youtube_video_id, scheduled_time, upload_status)

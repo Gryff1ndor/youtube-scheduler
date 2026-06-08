@@ -50,6 +50,31 @@ CREATE TABLE scheduled_uploads (
     CONSTRAINT fk_scheduled_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 );
 
+-- Community Comments
+CREATE TABLE community_comments (
+    id VARCHAR2(255) PRIMARY KEY,
+    channel_id VARCHAR2(255),
+    video_id VARCHAR2(255),
+    author_name VARCHAR2(255),
+    author_profile_image_url VARCHAR2(500),
+    text_display CLOB,
+    published_at TIMESTAMP,
+    like_count NUMBER DEFAULT 0,
+    replied NUMBER(1) DEFAULT 0 NOT NULL,
+    reply_text CLOB,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL
+);
+
+-- Notifications Table
+CREATE TABLE notifications (
+    id          NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    user_id     VARCHAR2(255),
+    title       VARCHAR2(255) NOT NULL,
+    description CLOB,
+    read        NUMBER(1) DEFAULT 0 NOT NULL,
+    created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL
+);
+
 -- ------------------------------------------------------------------------------
 -- 2. PL/SQL Packages for Analytics Aggregation
 -- ------------------------------------------------------------------------------

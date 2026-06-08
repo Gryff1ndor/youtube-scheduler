@@ -22,6 +22,8 @@ type Comment = {
   videoTitle: string;
   videoId: string;
   likeCount: number;
+  replied: boolean;
+  replyText?: string;
 };
 
 type ReplyState = {
@@ -104,6 +106,12 @@ export default function CommunityPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [replies, setReplies] = useState<Record<string, ReplyState>>({});
+  const [activeTab, setActiveTab] = useState<"inbox" | "replied">("inbox");
+
+  // ── Derived state ───────────────────────────────────────────────────────────
+  const displayedComments = comments.filter((c) =>
+    activeTab === "inbox" ? !c.replied : c.replied
+  );
 
   // ── Fetch comments ──────────────────────────────────────────────────────────
   const fetchComments = useCallback(async () => {
@@ -113,10 +121,11 @@ export default function CommunityPage() {
       const data = await res.json();
       if (data.success) {
         setComments(data.comments);
-        if (data.comments.length > 0 && !selectedId) {
-          // Auto-select first comment only on tablet/desktop to avoid hiding the inbox on mobile
-          if (window.innerWidth >= 768) {
-            setSelectedId(data.comments[0].id);
+        // Auto-select first comment of current tab only on tablet/desktop to avoid hiding the inbox on mobile
+        if (window.innerWidth >= 768) {
+          const firstInTab = data.comments.find((c: Comment) => activeTab === "inbox" ? !c.replied : c.replied);
+          if (firstInTab && !selectedId) {
+            setSelectedId(firstInTab.id);
           }
         }
       } else {
@@ -198,6 +207,11 @@ export default function CommunityPage() {
         [comment.id]: { draft: state.draft, isGenerating: false, isPosting: false, posted: true },
       }));
 
+      // Immediately move to Replied tab locally
+      setComments((prev) =>
+        prev.map((c) => (c.id === comment.id ? { ...c, replied: true } : c))
+      );
+
       toast.success(data.posted ? "Reply posted to YouTube! ✓" : "Reply drafted (dev mode)");
     } catch (err: any) {
       toast.error("Failed to post reply", { description: err.message });
@@ -255,15 +269,42 @@ export default function CommunityPage() {
           "w-full md:w-[320px] lg:w-[340px] xl:w-[380px] shrink-0 flex-col min-h-0 bg-surface border border-border rounded-2xl overflow-hidden",
           selectedId ? "hidden md:flex" : "flex"
         )}>
-          {/* Feed header */}
-          <div className="flex items-center gap-2 px-4 py-3.5 border-b border-border bg-surface-elevated/30 shrink-0">
-            <MessageCircle size={15} className="text-foreground-muted" />
-            <span className="text-xs font-semibold text-foreground-muted uppercase tracking-wider">
-              Inbox
-            </span>
+          {/* Feed header & Tabs */}
+          <div className="flex items-center justify-between px-4 py-2.5 border-b border-border bg-surface-elevated/30 shrink-0">
+            <div className="flex items-center gap-1 bg-white/5 p-1 rounded-lg border border-white/10">
+              <button
+                onClick={() => {
+                  setActiveTab("inbox");
+                  setSelectedId(null);
+                }}
+                className={cn(
+                  "px-3 py-1.5 rounded-md text-xs font-semibold transition-all duration-200",
+                  activeTab === "inbox" 
+                    ? "bg-[hsl(220_90%_56%/0.15)] text-[hsl(220,90%,56%)] shadow-sm" 
+                    : "text-foreground-muted hover:text-foreground hover:bg-white/5"
+                )}
+              >
+                Inbox
+              </button>
+              <button
+                onClick={() => {
+                  setActiveTab("replied");
+                  setSelectedId(null);
+                }}
+                className={cn(
+                  "px-3 py-1.5 rounded-md text-xs font-semibold transition-all duration-200",
+                  activeTab === "replied" 
+                    ? "bg-[hsl(220_90%_56%/0.15)] text-[hsl(220,90%,56%)] shadow-sm" 
+                    : "text-foreground-muted hover:text-foreground hover:bg-white/5"
+                )}
+              >
+                Replied
+              </button>
+            </div>
+            
             {!isLoading && (
-              <span className="ml-auto text-[10px] font-bold text-white/40 bg-white/5 px-2 py-0.5 rounded-full">
-                {comments.length}
+              <span className="text-[10px] font-bold text-white/40 bg-white/5 px-2 py-0.5 rounded-full">
+                {displayedComments.length}
               </span>
             )}
           </div>
@@ -274,11 +315,11 @@ export default function CommunityPage() {
               <div className="flex flex-col divide-y divide-border">
                 {Array.from({ length: 6 }).map((_, i) => <CommentSkeleton key={i} />)}
               </div>
-            ) : comments.length === 0 ? (
+            ) : displayedComments.length === 0 ? (
               <EmptyState />
             ) : (
               <div className="flex flex-col">
-                {comments.map((comment, idx) => {
+                {displayedComments.map((comment, idx) => {
                   const isSelected = comment.id === selectedId;
                   const hasReply = !!replies[comment.id];
 
@@ -319,7 +360,7 @@ export default function CommunityPage() {
                         <div className="flex items-center justify-between gap-1 mb-0.5">
                           <span className={cn(
                             "text-xs font-semibold truncate",
-                            isSelected ? "text-white" : "text-foreground"
+                            isSelected ? "text-neutral-900 dark:text-white" : "text-foreground"
                           )}>
                             {comment.authorName}
                           </span>
@@ -432,164 +473,191 @@ export default function CommunityPage() {
 
                   {/* ── Reply Zone ── */}
                   <div className="flex-1 flex flex-col gap-4">
-                    <AnimatePresence mode="wait">
-                      {/* No reply yet — show CTA */}
-                      {!selectedReply && (
-                        <motion.div
-                          key="cta"
-                          initial={{ opacity: 0, y: 6 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          exit={{ opacity: 0, y: -6 }}
-                          transition={{ duration: 0.25 }}
-                        >
-                          <button
-                            id="draft-ai-reply-btn"
-                            onClick={() => handleDraftReply(selectedComment)}
-                            className={cn(
-                              "group relative w-full flex items-center justify-center gap-2.5 py-3.5 rounded-xl",
-                              "text-sm font-semibold text-white",
-                              "bg-[hsl(220,90%,56%)] hover:bg-[hsl(220,90%,62%)]",
-                              "transition-all duration-300 ease-out",
-                              "shadow-[0_0_20px_hsl(220_90%_56%/0.35)] hover:shadow-[0_0_35px_hsl(220_90%_56%/0.55)]"
-                            )}
-                          >
-                            {/* Subtle shimmer */}
-                            <span
-                              className="absolute inset-0 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity duration-500"
-                              style={{
-                                background: "linear-gradient(105deg, transparent 40%, rgba(255,255,255,0.12) 50%, transparent 60%)",
-                                backgroundSize: "200% 100%",
-                              }}
-                            />
-                            <Sparkles size={16} className="shrink-0" />
-                            <span>Draft AI Reply</span>
-                          </button>
-                        </motion.div>
-                      )}
-
-                      {/* Generating state */}
-                      {selectedReply?.isGenerating && (
-                        <motion.div
-                          key="generating"
-                          initial={{ opacity: 0, scale: 0.97 }}
-                          animate={{ opacity: 1, scale: 1 }}
-                          exit={{ opacity: 0, scale: 0.97 }}
-                          transition={{ duration: 0.25 }}
-                          className="rounded-2xl border border-[hsl(220_90%_56%/0.25)] bg-[hsl(220_90%_56%/0.04)] p-5"
-                        >
-                          <div className="flex items-center gap-3 mb-3">
-                            <div className="w-7 h-7 rounded-lg bg-[hsl(220_90%_56%/0.15)] border border-[hsl(220_90%_56%/0.3)] flex items-center justify-center">
-                              <Sparkles size={13} className="text-[hsl(220,90%,56%)]" />
-                            </div>
-                            <span className="text-xs font-semibold text-foreground-muted uppercase tracking-wider">Gemini is composing…</span>
+                    {selectedComment.replied ? (
+                      <motion.div
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        className="flex flex-col gap-3"
+                      >
+                        <div className="rounded-2xl border border-[hsl(220_90%_56%/0.25)] bg-[hsl(220_90%_56%/0.04)] p-4 flex gap-3 relative overflow-hidden">
+                          {/* Thread connection line */}
+                          <div className="absolute left-6 -top-4 w-0.5 h-6 bg-[hsl(220_90%_56%/0.25)] rounded-full" />
+                          <div className="w-8 h-8 rounded-full bg-[hsl(220_90%_56%/0.15)] flex items-center justify-center shrink-0 border border-[hsl(220_90%_56%/0.3)]">
+                            <Sparkles size={14} className="text-[hsl(220,90%,56%)]" />
                           </div>
-
-                          {/* Animated shimmer lines */}
-                          <div className="space-y-2.5">
-                            {[100, 85, 65].map((w, i) => (
-                              <div
-                                key={i}
-                                className="h-3 rounded-full bg-white/[0.06] overflow-hidden"
-                                style={{ width: `${w}%` }}
-                              >
-                                <motion.div
-                                  className="h-full rounded-full bg-gradient-to-r from-transparent via-[hsl(220_90%_56%/0.4)] to-transparent"
-                                  animate={{ x: ["-100%", "200%"] }}
-                                  transition={{ duration: 1.5, repeat: Infinity, ease: "easeInOut", delay: i * 0.2 }}
-                                />
-                              </div>
-                            ))}
-                          </div>
-                        </motion.div>
-                      )}
-
-                      {/* Draft ready — editable textarea + post button */}
-                      {selectedReply && !selectedReply.isGenerating && selectedReply.draft && (
-                        <motion.div
-                          key="draft"
-                          initial={{ opacity: 0, y: 10 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          exit={{ opacity: 0 }}
-                          transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
-                          className="flex flex-col gap-3"
-                        >
-                          {/* Reply composer card */}
-                          <div className="rounded-2xl border border-[hsl(220_90%_56%/0.25)] bg-[hsl(220_90%_56%/0.04)] overflow-hidden">
-                            <div className="flex items-center gap-2 px-4 py-2.5 border-b border-[hsl(220_90%_56%/0.15)]">
-                              <div className="w-5 h-5 rounded-md bg-[hsl(220_90%_56%/0.15)] flex items-center justify-center">
-                                <Sparkles size={11} className="text-[hsl(220,90%,56%)]" />
-                              </div>
-                              <span className="text-xs font-semibold text-[hsl(220,90%,56%)]">Gemini Draft</span>
-                              <span className="ml-auto text-[10px] text-foreground-muted flex items-center gap-1">
-                                <Edit3 size={9} />
-                                Editable
+                          <div>
+                            <div className="flex items-center gap-2 mb-1">
+                              <p className="text-xs font-semibold text-[hsl(220,90%,56%)]">Your Reply</p>
+                              <span className="text-[10px] text-foreground-muted flex items-center gap-1 bg-white/5 px-1.5 py-0.5 rounded">
+                                <CheckCircle2 size={10} className="text-[hsl(220,90%,56%)]" /> Sent
                               </span>
                             </div>
-                            <textarea
-                              id="reply-textarea"
-                              className={cn(
-                                "w-full bg-transparent px-4 py-3.5 text-sm text-foreground/90",
-                                "leading-relaxed resize-none outline-none placeholder:text-foreground-muted/40",
-                                "min-h-[100px]"
-                              )}
-                              value={replies[selectedComment.id]?.draft ?? ""}
-                              onChange={(e) =>
-                                setReplies((prev) => ({
-                                  ...prev,
-                                  [selectedComment.id]: {
-                                    ...prev[selectedComment.id],
-                                    draft: e.target.value,
-                                  },
-                                }))
-                              }
-                              disabled={selectedReply.posted}
-                            />
+                            <p className="text-sm text-foreground/90 leading-relaxed font-light mt-1.5">
+                              {selectedComment.replyText || "Replied via YouTube."}
+                            </p>
                           </div>
-
-                          {/* Action row */}
-                          {selectedReply.posted ? (
-                            <motion.div
-                              initial={{ opacity: 0, scale: 0.95 }}
-                              animate={{ opacity: 1, scale: 1 }}
-                              className="flex items-center justify-center gap-2 py-3 rounded-xl bg-emerald-500/10 border border-emerald-500/25 text-emerald-400 text-sm font-semibold"
+                        </div>
+                      </motion.div>
+                    ) : (
+                      <AnimatePresence mode="wait">
+                        {/* No reply yet — show CTA */}
+                        {!selectedReply && (
+                          <motion.div
+                            key="cta"
+                            initial={{ opacity: 0, y: 6 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            exit={{ opacity: 0, y: -6 }}
+                            transition={{ duration: 0.25 }}
+                          >
+                            <button
+                              id="draft-ai-reply-btn"
+                              onClick={() => handleDraftReply(selectedComment)}
+                              className={cn(
+                                "group relative w-full flex items-center justify-center gap-2.5 py-3.5 rounded-xl",
+                                "text-sm font-semibold text-white",
+                                "bg-[hsl(220,90%,56%)] hover:bg-[hsl(220,90%,62%)]",
+                                "transition-all duration-300 ease-out",
+                                "shadow-[0_0_20px_hsl(220_90%_56%/0.35)] hover:shadow-[0_0_35px_hsl(220_90%_56%/0.55)]"
+                              )}
                             >
-                              <CheckCircle2 size={15} />
-                              Reply sent!
-                            </motion.div>
-                          ) : (
-                            <div className="flex items-center gap-3">
-                              <button
-                                onClick={() => handleDraftReply(selectedComment)}
-                                className="flex items-center gap-1.5 text-xs font-medium text-foreground-muted hover:text-foreground transition-colors px-3 py-2 rounded-lg border border-border hover:bg-surface-elevated"
-                              >
-                                <RefreshCw size={12} />
-                                Regenerate
-                              </button>
+                              {/* Subtle shimmer */}
+                              <span
+                                className="absolute inset-0 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity duration-500"
+                                style={{
+                                  background: "linear-gradient(105deg, transparent 40%, rgba(255,255,255,0.12) 50%, transparent 60%)",
+                                  backgroundSize: "200% 100%",
+                                }}
+                              />
+                              <Sparkles size={16} className="shrink-0" />
+                              <span>Draft AI Reply</span>
+                            </button>
+                          </motion.div>
+                        )}
 
-                              <button
-                                id="post-reply-btn"
-                                onClick={() => handlePostReply(selectedComment)}
-                                disabled={selectedReply.isPosting || !replies[selectedComment.id]?.draft?.trim()}
-                                className={cn(
-                                  "flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl",
-                                  "text-sm font-semibold text-white",
-                                  "bg-[hsl(220,90%,56%)] hover:bg-[hsl(220,90%,62%)]",
-                                  "transition-all duration-200",
-                                  "shadow-[0_0_16px_hsl(220_90%_56%/0.3)] hover:shadow-[0_0_24px_hsl(220_90%_56%/0.5)]",
-                                  "disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none"
-                                )}
-                              >
-                                {selectedReply.isPosting ? (
-                                  <><Loader2 size={14} className="animate-spin" /> Posting…</>
-                                ) : (
-                                  <><Send size={14} /> Post Reply</>
-                                )}
-                              </button>
+                        {/* Generating state */}
+                        {selectedReply?.isGenerating && (
+                          <motion.div
+                            key="generating"
+                            initial={{ opacity: 0, scale: 0.97 }}
+                            animate={{ opacity: 1, scale: 1 }}
+                            exit={{ opacity: 0, scale: 0.97 }}
+                            transition={{ duration: 0.25 }}
+                            className="rounded-2xl border border-[hsl(220_90%_56%/0.25)] bg-[hsl(220_90%_56%/0.04)] p-5"
+                          >
+                            <div className="flex items-center gap-3 mb-3">
+                              <div className="w-7 h-7 rounded-lg bg-[hsl(220_90%_56%/0.15)] border border-[hsl(220_90%_56%/0.3)] flex items-center justify-center">
+                                <Sparkles size={13} className="text-[hsl(220,90%,56%)]" />
+                              </div>
+                              <span className="text-xs font-semibold text-foreground-muted uppercase tracking-wider">Gemini is composing…</span>
                             </div>
-                          )}
-                        </motion.div>
-                      )}
-                    </AnimatePresence>
+
+                            {/* Animated shimmer lines */}
+                            <div className="space-y-2.5">
+                              {[100, 85, 65].map((w, i) => (
+                                <div
+                                  key={i}
+                                  className="h-3 rounded-full bg-white/[0.06] overflow-hidden"
+                                  style={{ width: `${w}%` }}
+                                >
+                                  <motion.div
+                                    className="h-full rounded-full bg-gradient-to-r from-transparent via-[hsl(220_90%_56%/0.4)] to-transparent"
+                                    animate={{ x: ["-100%", "200%"] }}
+                                    transition={{ duration: 1.5, repeat: Infinity, ease: "easeInOut", delay: i * 0.2 }}
+                                  />
+                                </div>
+                              ))}
+                            </div>
+                          </motion.div>
+                        )}
+
+                        {/* Draft ready — editable textarea + post button */}
+                        {selectedReply && !selectedReply.isGenerating && selectedReply.draft && (
+                          <motion.div
+                            key="draft"
+                            initial={{ opacity: 0, y: 10 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            exit={{ opacity: 0 }}
+                            transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
+                            className="flex flex-col gap-3"
+                          >
+                            {/* Reply composer card */}
+                            <div className="rounded-2xl border border-[hsl(220_90%_56%/0.25)] bg-[hsl(220_90%_56%/0.04)] overflow-hidden">
+                              <div className="flex items-center gap-2 px-4 py-2.5 border-b border-[hsl(220_90%_56%/0.15)]">
+                                <div className="w-5 h-5 rounded-md bg-[hsl(220_90%_56%/0.15)] flex items-center justify-center">
+                                  <Sparkles size={11} className="text-[hsl(220,90%,56%)]" />
+                                </div>
+                                <span className="text-xs font-semibold text-[hsl(220,90%,56%)]">Gemini Draft</span>
+                                <span className="ml-auto text-[10px] text-foreground-muted flex items-center gap-1">
+                                  <Edit3 size={9} />
+                                  Editable
+                                </span>
+                              </div>
+                              <textarea
+                                id="reply-textarea"
+                                className={cn(
+                                  "w-full bg-transparent px-4 py-3.5 text-sm text-foreground/90",
+                                  "leading-relaxed resize-none outline-none placeholder:text-foreground-muted/40",
+                                  "min-h-[100px]"
+                                )}
+                                value={replies[selectedComment.id]?.draft ?? ""}
+                                onChange={(e) =>
+                                  setReplies((prev) => ({
+                                    ...prev,
+                                    [selectedComment.id]: {
+                                      ...prev[selectedComment.id],
+                                      draft: e.target.value,
+                                    },
+                                  }))
+                                }
+                                disabled={selectedReply.posted}
+                              />
+                            </div>
+
+                            {/* Action row */}
+                            {selectedReply.posted ? (
+                              <motion.div
+                                initial={{ opacity: 0, scale: 0.95 }}
+                                animate={{ opacity: 1, scale: 1 }}
+                                className="flex items-center justify-center gap-2 py-3 rounded-xl bg-emerald-500/10 border border-emerald-500/25 text-emerald-400 text-sm font-semibold"
+                              >
+                                <CheckCircle2 size={15} />
+                                Reply sent!
+                              </motion.div>
+                            ) : (
+                              <div className="flex items-center gap-3">
+                                <button
+                                  onClick={() => handleDraftReply(selectedComment)}
+                                  className="flex items-center gap-1.5 text-xs font-medium text-foreground-muted hover:text-foreground transition-colors px-3 py-2 rounded-lg border border-border hover:bg-surface-elevated"
+                                >
+                                  <RefreshCw size={12} />
+                                  Regenerate
+                                </button>
+
+                                <button
+                                  id="post-reply-btn"
+                                  onClick={() => handlePostReply(selectedComment)}
+                                  disabled={selectedReply.isPosting || !replies[selectedComment.id]?.draft?.trim()}
+                                  className={cn(
+                                    "flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl",
+                                    "text-sm font-semibold text-white",
+                                    "bg-[hsl(220,90%,56%)] hover:bg-[hsl(220,90%,62%)]",
+                                    "transition-all duration-200",
+                                    "shadow-[0_0_16px_hsl(220_90%_56%/0.3)] hover:shadow-[0_0_24px_hsl(220_90%_56%/0.5)]",
+                                    "disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none"
+                                  )}
+                                >
+                                  {selectedReply.isPosting ? (
+                                    <><Loader2 size={14} className="animate-spin" /> Posting…</>
+                                  ) : (
+                                    <><Send size={14} /> Post Reply</>
+                                  )}
+                                </button>
+                              </div>
+                            )}
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
+                    )}
                   </div>
                 </motion.div>
               )}

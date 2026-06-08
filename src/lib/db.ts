@@ -128,6 +128,32 @@ export async function initSchema(): Promise<void> {
     `CREATE INDEX IF NOT EXISTS idx_scheduled_uploads_user
        ON scheduled_uploads (user_id, scheduled_time)`,
 
+    // ── Community Comments ───────────────────────────────────────────────────
+    `CREATE TABLE IF NOT EXISTS community_comments (
+       id                       TEXT PRIMARY KEY,
+       channel_id               TEXT,
+       video_id                 TEXT,
+       author_name              TEXT,
+       author_profile_image_url TEXT,
+       text_display             TEXT,
+       published_at             TEXT,
+       like_count               INTEGER DEFAULT 0,
+       replied                  INTEGER DEFAULT 0 NOT NULL,
+       reply_text               TEXT,
+       is_owner                 INTEGER DEFAULT 0 NOT NULL,
+       created_at               TEXT NOT NULL DEFAULT (datetime('now'))
+     )`,
+
+    // ── Notifications ────────────────────────────────────────────────────────
+    `CREATE TABLE IF NOT EXISTS notifications (
+       id          INTEGER PRIMARY KEY AUTOINCREMENT,
+       user_id     TEXT,
+       title       TEXT NOT NULL,
+       description TEXT,
+       read        INTEGER DEFAULT 0 NOT NULL,
+       created_at  TEXT NOT NULL DEFAULT (datetime('now'))
+     )`,
+
     // ── Analytics Snapshots ──────────────────────────────────────────────────
     `CREATE TABLE IF NOT EXISTS analytics_snapshots (
        id              INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -162,6 +188,24 @@ export async function initSchema(): Promise<void> {
 
   _schemaInitialised = true;
   console.info("[db] Schema verified — all tables ready.");
+
+  // ── Database Migration: Add reply_text column if it does not exist ─────────
+  try {
+    const db = getDb();
+    await db.execute("ALTER TABLE community_comments ADD COLUMN reply_text TEXT");
+    console.info("[db] Migration: added reply_text column to community_comments table.");
+  } catch (err: any) {
+    // Safe to ignore if column already exists (SQLite error: duplicate column name)
+  }
+
+  // ── Database Migration: Add is_owner column if it does not exist ───────────
+  try {
+    const db = getDb();
+    await db.execute("ALTER TABLE community_comments ADD COLUMN is_owner INTEGER DEFAULT 0 NOT NULL");
+    console.info("[db] Migration: added is_owner column to community_comments table.");
+  } catch (err: any) {
+    // Safe to ignore if column already exists
+  }
 }
 
 // ── Query helpers ─────────────────────────────────────────────────────────────
@@ -255,6 +299,62 @@ export async function upsertChannelMetrics(params: {
 }
 
 /**
+ * Upsert a community comment from YouTube sync.
+ * Preserves the replied status if it's already true locally, or sets it based on totalReplyCount.
+ */
+export async function upsertCommunityComment(params: {
+  id: string;
+  channelId: string;
+  videoId: string;
+  authorName: string;
+  authorProfileImageUrl: string;
+  textDisplay: string;
+  publishedAt: string;
+  likeCount: number;
+  replied: boolean;
+  replyText?: string;
+  isOwner?: boolean;
+}) {
+  return run(
+    `INSERT INTO community_comments
+       (id, channel_id, video_id, author_name, author_profile_image_url, text_display, published_at, like_count, replied, reply_text, is_owner)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+     ON CONFLICT(id) DO UPDATE SET
+       author_name = excluded.author_name,
+       author_profile_image_url = excluded.author_profile_image_url,
+       text_display = excluded.text_display,
+       published_at = excluded.published_at,
+       like_count = excluded.like_count,
+       replied = CASE WHEN community_comments.replied = 1 THEN 1 ELSE excluded.replied END,
+       reply_text = CASE WHEN (excluded.reply_text IS NOT NULL AND excluded.reply_text != '') THEN excluded.reply_text ELSE community_comments.reply_text END,
+       is_owner = excluded.is_owner`,
+    [
+      params.id,
+      params.channelId,
+      params.videoId,
+      params.authorName,
+      params.authorProfileImageUrl,
+      params.textDisplay,
+      params.publishedAt,
+      params.likeCount,
+      params.replied ? 1 : 0,
+      params.replyText ?? null,
+      params.isOwner ? 1 : 0,
+    ]
+  );
+}
+
+/**
+ * Mark a comment as replied internally with reply text.
+ */
+export async function markCommentReplied(commentId: string, replyText: string) {
+  return run(
+    `UPDATE community_comments SET replied = 1, reply_text = ? WHERE id = ?`,
+    [replyText, commentId]
+  );
+}
+
+/**
  * Log a Gemini AI action to the audit trail.
  */
 export async function logAiAction(params: {
@@ -282,6 +382,85 @@ export async function logAiAction(params: {
       params.errorMessage ?? null,
     ]
   );
+}
+/**
+ * Notification types
+ */
+export interface DbNotification {
+  id: number;
+  user_id: string | null;
+  title: string;
+  description: string | null;
+  read: number;
+  created_at: string;
+}
+
+/**
+ * Fetch all notifications for a user, sorted by created_at descending.
+ */
+export async function getNotifications(userId: string): Promise<DbNotification[]> {
+  return query<DbNotification>(
+    `SELECT id, user_id, title, description, read, created_at
+     FROM notifications
+     WHERE user_id = ? OR user_id IS NULL
+     ORDER BY created_at DESC`,
+    [userId]
+  );
+}
+
+/**
+ * Fetch unread notifications count for a user.
+ */
+export async function getUnreadNotificationsCount(userId: string): Promise<number> {
+  const row = await queryOne<{ count: number }>(
+    `SELECT COUNT(*) as count FROM notifications WHERE (user_id = ? OR user_id IS NULL) AND read = 0`,
+    [userId]
+  );
+  return row?.count ?? 0;
+}
+
+/**
+ * Mark all notifications as read for a user.
+ */
+export async function markNotificationsAsRead(userId: string): Promise<void> {
+  await run(
+    `UPDATE notifications SET read = 1 WHERE user_id = ? OR user_id IS NULL`,
+    [userId]
+  );
+}
+
+/**
+ * Insert a notification.
+ */
+export async function insertNotification(params: {
+  userId?: string;
+  title: string;
+  description?: string;
+  createdAt?: string;
+}) {
+  return run(
+    `INSERT INTO notifications (user_id, title, description, created_at)
+     VALUES (?, ?, ?, COALESCE(?, datetime('now')))`,
+    [params.userId ?? null, params.title, params.description ?? null, params.createdAt ?? null]
+  );
+}
+
+/**
+ * Count unreplied comments in the community feed.
+ */
+export async function getPendingCommentsCount(channelId?: string): Promise<number> {
+  if (channelId) {
+    const row = await queryOne<{ count: number }>(
+      `SELECT COUNT(*) as count FROM community_comments WHERE channel_id = ? AND replied = 0 AND is_owner = 0`,
+      [channelId]
+    );
+    return row?.count ?? 0;
+  } else {
+    const row = await queryOne<{ count: number }>(
+      `SELECT COUNT(*) as count FROM community_comments WHERE replied = 0 AND is_owner = 0`
+    );
+    return row?.count ?? 0;
+  }
 }
 
 /**

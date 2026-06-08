@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import { signIn } from "next-auth/react";
-import { motion } from "framer-motion";
 import { Loader2 } from "lucide-react";
 
 export default function LoginPage() {
@@ -192,11 +191,8 @@ export default function LoginPage() {
           padding: "48px 40px",
         }}
       >
-        <motion.div
-          className="auth-card"
-          initial={{ opacity: 0, y: 16 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.55, ease: [0.16, 1, 0.3, 1] }}
+        <div
+          className="auth-card animate-fade-in"
           style={{ width: "100%", maxWidth: "340px" }}
         >
           {/* Logo Brand Mark */}
@@ -266,11 +262,10 @@ export default function LoginPage() {
           </p>
 
           {/* Google sign-in button (primary action) */}
-          <motion.button
+          <button
             onClick={handleGoogleLogin}
             disabled={isLoggingIn}
-            whileHover={{ scale: isLoggingIn ? 1 : 1.015 }}
-            whileTap={{ scale: isLoggingIn ? 1 : 0.975 }}
+            className="transition-all duration-200 hover:scale-[1.015] active:scale-[0.975] disabled:opacity-75 disabled:cursor-not-allowed"
             style={{
               width: "100%",
               height: "50px",
@@ -301,7 +296,7 @@ export default function LoginPage() {
               </svg>
             )}
             {isLoggingIn ? "Connecting…" : "Continue with Google"}
-          </motion.button>
+          </button>
 
           {/* Divider */}
           <div
@@ -318,11 +313,10 @@ export default function LoginPage() {
           </div>
 
           {/* YouTube sign-in (secondary) */}
-          <motion.button
+          <button
             onClick={handleGoogleLogin}
             disabled={isLoggingIn}
-            whileHover={{ scale: isLoggingIn ? 1 : 1.015, background: isLoggingIn ? "rgba(255,255,255,0.04)" : "rgba(255,255,255,0.07)" }}
-            whileTap={{ scale: isLoggingIn ? 1 : 0.975 }}
+            className="transition-all duration-200 hover:scale-[1.015] hover:bg-[rgba(255,255,255,0.07)] active:scale-[0.975] disabled:opacity-75 disabled:cursor-not-allowed"
             style={{
               width: "100%",
               height: "46px",
@@ -345,7 +339,7 @@ export default function LoginPage() {
               <path d="M23.495 6.205a3.007 3.007 0 0 0-2.088-2.088c-1.87-.501-9.396-.501-9.396-.501s-7.507-.01-9.396.501A3.007 3.007 0 0 0 .527 6.205a31.247 31.247 0 0 0-.522 5.805 31.247 31.247 0 0 0 .522 5.783 3.007 3.007 0 0 0 2.088 2.088c1.868.502 9.396.502 9.396.502s7.506 0 9.396-.502a3.007 3.007 0 0 0 2.088-2.088 31.247 31.247 0 0 0 .5-5.783 31.247 31.247 0 0 0-.5-5.805zM9.609 15.601V8.408l6.264 3.602z" />
             </svg>
             Sign in with YouTube
-          </motion.button>
+          </button>
 
           {/* Footer */}
           <p
@@ -367,7 +361,7 @@ export default function LoginPage() {
             </span>
             .
           </p>
-        </motion.div>
+        </div>
       </div>
 
       {/* Responsive CSS */}
